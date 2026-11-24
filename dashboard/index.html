@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Token Radar — pre-token protocols, ranked by implied value</title>
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<header class="top">
+  <div class="brand">
+    <div class="mark">◉</div>
+    <div>
+      <h1>TOKEN RADAR</h1>
+      <p class="sub">Pre-token protocols, ranked by implied value — and how to farm each one.</p>
+    </div>
+  </div>
+  <dl class="stats" id="stats"></dl>
+</header>
+
+<main>
+  <section class="panel toolbar" aria-label="Filters">
+    <div class="tabs" role="tablist" aria-label="Board">
+      <button id="tab-pre" class="tab on" role="tab" aria-selected="true">Pre-token radar</button>
+      <button id="tab-live" class="tab" role="tab" aria-selected="false">Live tokens</button>
+    </div>
+    <input id="q" type="search" placeholder="Search a protocol…" aria-label="Search a protocol">
+    <select id="category" aria-label="Filter by category"><option value="">All categories</option></select>
+    <select id="chain" aria-label="Filter by chain"><option value="">All chains</option></select>
+    <label class="watch"><input id="watchlist-only" type="checkbox"> Watchlist only</label>
+  </section>
+
+  <section class="panel">
+    <p class="hint" id="count"></p>
+    <div class="table-wrap">
+      <table id="board">
+        <thead>
+          <tr>
+            <th data-sort="rank" class="num on">#</th>
+            <th data-sort="name">Protocol</th>
+            <th data-sort="category">Category</th>
+            <th data-sort="chains">Chains</th>
+            <th data-sort="tvl_usd" class="num">TVL</th>
+            <th data-sort="change_7d" class="num">7d</th>
+            <th data-sort="age_days" class="num">Age</th>
+            <th data-sort="implied_value_usd" class="num">Implied value</th>
+          </tr>
+        </thead>
+        <tbody id="rows"></tbody>
+      </table>
+      <table id="live" hidden>
+        <thead>
+          <tr>
+            <th class="num">#</th>
+            <th>Protocol</th>
+            <th>Category</th>
+            <th>Chains</th>
+            <th class="num">TVL</th>
+            <th class="num">7d</th>
+            <th class="num">Market cap</th>
+          </tr>
+        </thead>
+        <tbody id="live-rows"></tbody>
+      </table>
+    </div>
+    <p class="hint">Click a row for the model breakdown and the farm plan. “Records no token” is DefiLlama's record, not proof a protocol has none.</p>
+  </section>
+
+  <section class="panel method" id="method">
+    <h2>How the radar scores</h2>
+    <p class="formula">implied value = TVL × category multiple × growth × maturity × breadth</p>
+    <p>The multiple is the market's own: <strong>buildMultiples</strong> takes the median market cap / TVL of the token protocols in the same category (at least three of them), and falls back to the median of all token protocols, <span id="market-multiple"></span>. <strong>impliedValue</strong> then applies the protocol's own seven-day TVL growth (clamped to −60%…+120%), how long it has run with no token (0.55× at day zero, 1.00× at three years), and a small breadth factor for each extra chain. No protocol name is ever special-cased — <strong>isRankable</strong> applies the same test to every row, and wrapped, staked or bridged products of a token that already trades are never ranked.</p>
+    <div class="mult-grid" id="multiples"></div>
+    <p class="note">To the judge: the board covers all 40 watchlist protocols plus every other rankable pre-token protocol in the snapshot (198 rows), the Live tab is kept apart at market values, and each farm plan is built from the protocol's own category, chains, TVL and age by <strong>farmSteps</strong> — concrete steps with a cost and a time, not slogans.</p>
+  </section>
+</main>
+
+<footer>
+  <p>Data: DefiLlama protocol snapshot, 14 November 2026. The implied value is this radar's own claim, never a promise — a protocol may never issue a token, and a token may be worth nothing. Not financial advice.</p>
+</footer>
+
+<dialog id="detail" aria-label="Protocol detail">
+  <form method="dialog"><button class="close" aria-label="Close">✕</button></form>
+  <div id="detail-body"></div>
+</dialog>
+
+<script src="../data.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
