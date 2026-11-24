@@ -32,7 +32,9 @@ strong { color: var(--lime); font-weight: 650; }
   max-width: 1180px; margin: 0 auto; padding: 26px 20px 14px;
 }
 .brand { display: flex; gap: 12px; align-items: center; }
-.mark { color: var(--lime); font-size: 34px; line-height: 1; }
+.mark { position: relative; width: 34px; height: 34px; flex: none; border: 2px solid var(--lime); border-radius: 50%; }
+.mark-dot { position: absolute; left: 50%; top: 50%; width: 6px; height: 6px; margin: -3px 0 0 -3px; background: var(--lime); border-radius: 50%; }
+.mark-sweep { position: absolute; inset: 2px; border-radius: 50%; background: conic-gradient(from 0deg, rgba(182,232,47,.45), transparent 100deg); }
 .sub { color: var(--muted); margin: 2px 0 0; font-size: 14px; }
 .stats { display: flex; flex-wrap: wrap; gap: 8px 22px; margin: 0; }
 .stats div { display: flex; flex-direction: column; }
@@ -89,6 +91,9 @@ td .wl { color: var(--lime); font-size: 11px; font-weight: 700; margin-left: 6px
 td .up { color: var(--green); }
 td .down { color: var(--red); }
 td .val { color: var(--lime); font-weight: 700; }
+td .valbar { display: block; height: 3px; background: var(--lime-dim); border-radius: 2px; margin: 4px 0 0 auto; }
+tbody tr.top3 td { background: rgba(182,232,47,.045); }
+tbody tr.top3 td.num:first-child { color: var(--lime); font-weight: 800; }
 td .chains { color: var(--muted); font-size: 13px; }
 
 /* Methodology */

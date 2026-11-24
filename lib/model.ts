@@ -380,7 +380,7 @@ export function buildBoard(snapshot: Snapshot, model: ModelConstants = MODEL): B
       breadth_multiplier: round4(s.v.breadthMult),
       age_days: s.v.age,
     },
-    farm_steps: farmSteps(s.p, s.v.age).map(stepText),
+    farm_steps: farmSteps(s.p, s.v.age, s.v.growthPct).map(stepText),
   }));
 }
 
@@ -408,12 +408,110 @@ function capitalFor(p: SnapshotProtocol): number {
   return 50;
 }
 
-/** How long to hold, from the protocol's age: younger protocols get a longer qualifying window. */
-function holdDaysFor(age: number | null): number {
-  if (age === null) return 30;
-  if (age < 180) return 60;
-  if (age < 365) return 45;
-  return 30;
+/** What gas costs on a protocol's first chain, and what asset pays it. */
+function gasFor(p: SnapshotProtocol): { setup: string; weekly: string; asset: string } {
+  const chain = chainOf(p).toLowerCase();
+  if (chain.includes('solana')) return { setup: 'about $0.05 of gas', weekly: 'about $0.05 of gas', asset: 'SOL' };
+  if (chain.includes('ethereum')) return { setup: 'about $5 to $15 of gas', weekly: 'about $3 to $8 of gas', asset: 'ETH' };
+  if (chain.includes('bitcoin')) return { setup: 'about $2 to $5 of gas', weekly: 'about $2 to $5 of gas', asset: 'BTC' };
+  return { setup: 'under $1 of gas', weekly: 'under $1 of gas', asset: 'the chain’s native token' };
+}
+
+/** How long to hold, from the protocol's age and its seven-day growth: young and fast-growing protocols get a longer qualifying window. */
+function holdDaysFor(age: number | null, growthPct: number): number {
+  const base = age === null ? 30 : age < 180 ? 60 : age < 365 ? 45 : 30;
+  const bump = growthPct > 20 ? 15 : growthPct < -20 ? -15 : 0;
+  return Math.min(75, Math.max(30, base + bump));
+}
+
+/** The weekly qualifying action, in the words a farmer can follow. */
+function weeklyFor(p: SnapshotProtocol, chain: string): string {
+  const c = (p.category ?? '').toLowerCase();
+  const name = p.name;
+  if (c.includes('curator') || c.includes('allocator')) return `Deposit a small amount into the same ${name} vault and rebalance if the curator moved funds.`;
+  if (c.includes('rwa')) return `Check the yield accrued on the ${name} position and add a small top-up to it.`;
+  if (c.includes('basis')) return `Check the funding rate on ${name} and keep the basis position open, topping up if it narrowed.`;
+  if (c.includes('lend') || c.includes('cdp') || c.includes('collateral')) return `Borrow a small amount against the supply on ${name}, then repay it the same week.`;
+  if (c.includes('dex') || c.includes('leveraged farm') || c.includes('liquidity manager')) return `Rebalance the ${name} pool range or add a small amount of liquidity.`;
+  if (c.includes('yield aggregator')) return `Harvest the ${name} vault's yield and redeposit it.`;
+  if (c.includes('yield')) return `Claim the week's yield on ${name} and redeposit it into the same vault.`;
+  if (c.includes('bridge')) return `Bridge a small amount to another chain through ${name}.`;
+  if (c.includes('staking') || c.includes('restak')) return `Restake the week's rewards through ${name}.`;
+  if (c.includes('perpetual') || c.includes('derivative') || c.includes('options')) return `Open one small hedged position on ${name} and close it the same week.`;
+  if (c.includes('prediction')) return `Place one position on a ${name} market closing that week.`;
+  if (c.includes('stable')) return `Mint or redeem a small amount of the stable asset through ${name}.`;
+  if (c.includes('launchpad')) return `Join one launch or vote on one proposal on ${name}.`;
+  if (c.includes('privacy')) return `Run one private transaction through ${name}'s pool.`;
+  if (c.includes('ai agent') || c.includes('decentralized ai')) return `Run one agent task on ${name} and keep the receipt.`;
+  if (c.includes('payment')) return `Route one small payment through ${name} on ${chain}.`;
+  if (c.includes('nft')) return `List or trade one small item through ${name} on ${chain}.`;
+  if (c.includes('token locker')) return `Check the lock schedule on ${name} and extend one lock if it allows it.`;
+  if (c.includes('index')) return `Rebalance the ${name} index holding after the week's moves.`;
+  if (c.includes('chain')) return `Use one app built on ${name}.`;
+  if (c.includes('insurance')) return `Check the cover terms on ${name} and renew or top up one policy.`;
+  return `Make one qualifying action on ${name}, such as a deposit, a swap or a vote.`;
+}
+
+/** Categories where a points or rewards program is the usual way a launch is farmed. */
+function hasPointsProgram(p: SnapshotProtocol): boolean {
+  const c = (p.category ?? '').toLowerCase();
+  return (
+    c.includes('curator') || c.includes('allocator') || c.includes('rwa') || c.includes('yield') ||
+    c.includes('lend') || c.includes('cdp') || c.includes('perpetual') || c.includes('derivative') ||
+    c.includes('prediction') || c.includes('bridge') || c.includes('staking') || c.includes('restak') ||
+    c.includes('dex') || c.includes('launchpad') || c.includes('ai agent') || c.includes('decentralized ai') ||
+    c.includes('payment') || c.includes('nft') || c.includes('chain') || c.includes('basis') ||
+    c.includes('index') || c.includes('farm') || c.includes('synthetic') || c.includes('option')
+  );
+}
+
+/**
+ * A protocol's farm plan: six steps, each an action with a cost and a time. The
+ * plan is derived from the protocol's own record (category, chains, TVL, age
+ * and seven-day growth), never from a hand-written list of names.
+ */
+export function farmSteps(p: SnapshotProtocol, age: number | null, growthPct = 0): FarmStep[] {
+  const chain = chainOf(p);
+  const capital = capitalFor(p);
+  const hold = holdDaysFor(age, growthPct);
+  const action = actionFor(p, capital, chain);
+  const gas = gasFor(p);
+  const weekly = weeklyFor(p, chain);
+  const claim = hasPointsProgram(p)
+    ? `Before you withdraw, open the protocol's own points or rewards page and claim only from the link it publishes.`
+    : `Before you withdraw, check the protocol's official announcements page for any distribution news, and claim only from a link it publishes.`;
+  return [
+    {
+      text: `Use a fresh wallet that holds only the funds you plan to farm, and keep its seed phrase offline. Fund it with a little ${gas.asset} for gas on ${chain}.`,
+      cost: `${gas.setup} for the first transaction`,
+      time: '5 minutes',
+    },
+    {
+      text: action,
+      cost: `$${capital} of capital and ${gas.setup}`,
+      time: '15 minutes to set up',
+    },
+    {
+      text: weekly,
+      cost: `${gas.weekly} a week`,
+      time: '10 minutes a week',
+    },
+    {
+      text: `Hold the position for at least ${hold} days so the activity is counted in more than one snapshot.`,
+      cost: `the $${capital} stays in the position`,
+      time: `${hold} days`,
+    },
+    {
+      text: claim,
+      cost: 'no fee to check, and never pay to claim',
+      time: '10 minutes',
+    },
+    {
+      text: `Write the wallet, the dates and every transaction for ${p.name} in a farm log so you can repeat the position or unwind it.`,
+      cost: 'nothing but the log',
+      time: '5 minutes',
+    },
+  ];
 }
 
 /** The category's one action, in the words a farmer can follow. */
@@ -442,51 +540,6 @@ function actionFor(p: SnapshotProtocol, capital: number, chain: string): string 
   if (c.includes('chain')) return `Bridge $${capital} to ${chain} and use one app built on ${name}.`;
   if (c.includes('insurance')) return `Buy $${capital} of cover from ${name} on ${chain} and keep the policy.`;
   return `Deposit $${capital} of USDC into ${name} on ${chain} and keep the position open.`;
-}
-
-/**
- * A protocol's farm plan: six steps, each an action with a cost and a time. The
- * plan is derived from the protocol's own record (category, chains, TVL, age),
- * never from a hand-written list of names.
- */
-export function farmSteps(p: SnapshotProtocol, age: number | null): FarmStep[] {
-  const chain = chainOf(p);
-  const capital = capitalFor(p);
-  const hold = holdDaysFor(age);
-  const action = actionFor(p, capital, chain);
-  const gas = capital >= 150 ? 8 : 4;
-  return [
-    {
-      text: `Use a fresh wallet that holds only the funds you plan to farm, and keep its seed phrase offline.`,
-      cost: 'under $3 of gas for the first transaction',
-      time: '5 minutes',
-    },
-    {
-      text: action,
-      cost: `$${capital} of capital and about $${gas} of gas`,
-      time: '15 minutes to set up',
-    },
-    {
-      text: `Make one qualifying action each week, such as a deposit, a borrow, a swap or a vote.`,
-      cost: 'about $2 of gas a week',
-      time: '10 minutes a week',
-    },
-    {
-      text: `Hold the position for at least ${hold} days so the activity is counted in more than one snapshot.`,
-      cost: `the $${capital} stays in the position`,
-      time: `${hold} days`,
-    },
-    {
-      text: `Before you withdraw, open the protocol's own points or rewards page and claim only from the link it publishes.`,
-      cost: 'no fee to check, and never pay to claim',
-      time: '10 minutes',
-    },
-    {
-      text: `Write the wallet, the dates and every transaction in a farm log so you can repeat the position or unwind it.`,
-      cost: 'nothing but the log',
-      time: '5 minutes',
-    },
-  ];
 }
 
 /** The live-token protocols, by market cap, for the dashboard's Live view. */

@@ -125,6 +125,10 @@
     if (n === null || n === undefined) return '<span>—</span>';
     return '<span class="' + (n >= 0 ? 'up' : 'down') + '">' + pct(n) + '</span>';
   }
+  function chainText(chains) {
+    if (chains.length <= 3) return chains.join(', ');
+    return chains.slice(0, 3).join(', ') + ' +' + (chains.length - 3) + ' chains';
+  }
   function render() {
     var pre = state.tab === 'pre';
     $('tab-pre').classList.toggle('on', pre);
@@ -151,10 +155,11 @@
       return;
     }
     var rows = sortRows(visibleRows());
+    var topVal = R.rows.length ? R.rows[0].implied_value_usd : 1;
     $('count').textContent = rows.length + ' of ' + R.board_size + ' pre-token protocols' +
       (state.watchlist ? ' on the watchlist' : '') + ' · sorted by ' + state.sort.replace('_', ' ') + '.';
     $('rows').innerHTML = rows.map(function (r) {
-      return '<tr data-slug="' + esc(r.slug) + '">' +
+      return '<tr data-slug="' + esc(r.slug) + '"' + (r.rank <= 3 ? ' class="top3"' : '') + '>' +
         '<td class="num">' + r.rank + '</td>' +
         '<td class="name">' + esc(r.name) + '<span class="slug">' + esc(r.slug) + '</span></td>' +
         '<td><span class="chip">' + esc(r.category || '—') + '</span>' +
@@ -163,7 +168,8 @@
         '<td class="num">' + money(r.tvl_usd) + '</td>' +
         '<td class="num">' + changeCell(r.change_7d) + '</td>' +
         '<td class="num">' + ageText(r.age_days) + '</td>' +
-        '<td class="num val">' + money(r.implied_value_usd) + '</td></tr>';
+        '<td class="num val">' + money(r.implied_value_usd) +
+        '<span class="valbar" style="width:' + Math.max(2, Math.round(r.implied_value_usd / topVal * 100)) + '%"></span></td></tr>';
     }).join('') || '<tr><td colspan="8">Nothing matches these filters.</td></tr>';
   }
 
@@ -185,7 +191,7 @@
     $('detail-body').innerHTML =
       '<h2>' + esc(r.name) + '</h2>' +
       '<p class="meta">Rank #' + r.rank + ' · ' + esc(r.category || 'Uncategorised') + ' · ' +
-      esc(r.chains.join(', ')) + ' · ' + (watchlistSet[r.slug] ? 'on the watchlist · ' : '') +
+      esc(chainText(r.chains)) + ' · ' + (watchlistSet[r.slug] ? 'on the watchlist · ' : '') +
       'tracked since ' + esc(r.listed_at || 'unknown') + '</p>' +
       '<div class="big-label">Implied value</div>' +
       '<div class="big">' + moneyFull(r.implied_value_usd) + '</div>' +
