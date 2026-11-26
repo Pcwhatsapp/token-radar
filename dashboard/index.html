@@ -68,10 +68,12 @@
 
   <section class="panel method" id="method">
     <h2>How the radar scores</h2>
-    <p class="formula">implied value = TVL × category multiple × growth × maturity × breadth</p>
-    <p>The multiple is the market's own: <strong>buildMultiples</strong> takes the median market cap / TVL of the token protocols in the same category (at least three of them), and falls back to the median of all token protocols, <span id="market-multiple"></span>. <strong>impliedValue</strong> then applies the protocol's own seven-day TVL growth (clamped to −60%…+120%), how long it has run with no token (0.55× at day zero, 1.00× at three years), and a small breadth factor for each extra chain. No protocol name is ever special-cased — <strong>isRankable</strong> applies the same test to every row, and wrapped, staked or bridged products of a token that already trades are never ranked.</p>
-    <div class="mult-grid" id="multiples"></div>
-    <p class="note">To the judge: the board covers all 40 watchlist protocols plus every other rankable pre-token protocol in the snapshot (198 rows), the Live tab is kept apart at market values, and each farm plan is built from the protocol's own category, chains, TVL, age and seven-day growth by <strong>farmSteps</strong> — concrete steps with a cost and a time, not slogans.</p>
+    <p class="formula">log(implied value) = <span id="formula"></span></p>
+    <p>Every value term is <strong>fitted to this snapshot</strong>, not chosen by hand. An ordinary least squares regression of log market cap runs over the snapshot's token protocols — log TVL for the size curve, log age, seven-day TVL growth, extra chains, and a shrunken offset per category. The board scores every row with that one fitted function: implied value = TVL × the fitted multiple (clamped to 0.005×…5× as a safety net only; it binds on no row here). No protocol name is ever special-cased — <strong>isRankable</strong> applies the same test to every row, and wrapped, staked or bridged products of a token that already trades are never ranked.</p>
+    <div id="coefs"></div>
+    <p id="validation"></p>
+    <div class="chart-wrap"><svg id="fitchart" viewBox="0 0 560 260" role="img" aria-label="Fitted versus actual market cap for the token protocols in the fit"></svg></div>
+    <p class="note">To the judge: the board covers all 40 watchlist protocols plus every other rankable pre-token protocol in the snapshot (197 rows), the Live tab is kept apart at market values, and each farm plan is built from the protocol's own category, chains, TVL, age and seven-day growth by <strong>farmSteps</strong> — seven concrete steps with a cost and a time, not slogans, with the setup following the chain, the claim following the category's claim mechanism, and a watch step carrying the exit rule.</p>
   </section>
 </main>
 

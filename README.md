@@ -4,7 +4,7 @@
 [![rank](https://make.fun/badge/token-radar-01/Pcwhatsapp/token-radar/rank.svg)](https://make.fun/bounty/token-radar-01/leaderboard?utm_source=github&utm_medium=readme&utm_campaign=token-radar-01)
 [![reward](https://make.fun/badge/token-radar-01/Pcwhatsapp/token-radar/reward.svg)](https://make.fun/bounty/token-radar-01?utm_source=github&utm_medium=readme&utm_campaign=token-radar-01)
 
-Token Radar ranks pre-token DeFi protocols by implied value and shows how to farm each one, from a sealed DefiLlama snapshot (14 November 2026). 198 pre-token protocols ranked — all 40 on the watchlist, plus every other rankable one below the floor — with a value model read from the market's own multiples (median market cap / TVL per category), a concrete farm plan per protocol, and a Live view kept apart at market values.
+Token Radar ranks pre-token DeFi protocols by implied value and shows how to farm each one, from a sealed DefiLlama snapshot (14 November 2026). 197 pre-token protocols ranked — all 40 on the watchlist, plus every other rankable one below the floor — with a value model fitted to the snapshot's own token protocols (an OLS regression of log market cap, validated out of sample), a concrete farm plan per protocol, and a Live view kept apart at market values.
 
 ## Run it
 
@@ -22,7 +22,7 @@ Node 22.18+ (or newer), standard library only — no install, no network. `main.
 
 ## How it scores
 
-`implied value = TVL × category multiple × growth × maturity × breadth`, all from the snapshot's own figures: the multiple is the median market cap / TVL of the token protocols in the same category (falling back to the market median of ~0.20x), growth is the seven-day TVL change clamped to −60%…+120%, maturity rises from 0.55x to 1.00x over three years with no token, and each extra chain adds 2%. Wrapped, staked and bridged products of a token that already trades are never ranked. See `lib/model.ts` — `buildMultiples`, `impliedValue`, `isRankable`, `farmSteps`.
+`log(implied value) = b0 + b1·log(TVL) + b2·log(1 + age) + b3·growth + b4·extra chains + b5·age unknown + category offset`, all fitted by ordinary least squares to the snapshot's token protocols (121 of them; seven with market cap / TVL over 10× are excluded as non-comparable launches). The size curve is the strongest term: the fitted log-TVL coefficient is below 1, so the implied multiple falls as TVL grows. Validation is out of sample on a deterministic 80/20 split, beside the radar-2 median model on the same split — the dashboard shows both. Wrapped, staked and bridged products of a token that already trades are never ranked. See `lib/fit.ts` and `lib/model.ts` — `fitValueModel`, `impliedValue`, `isRankable`, `farmSteps`.
 
 ---
 

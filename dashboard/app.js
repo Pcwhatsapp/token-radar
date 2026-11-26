@@ -49,10 +49,56 @@
   $('stats').innerHTML = stats.map(function (s) {
     return '<div><dt>' + s[0] + '</dt><dd>' + esc(s[1]) + '</dd></div>';
   }).join('');
-  $('market-multiple').textContent = R.market_multiple.toFixed(3) + 'x';
-  $('multiples').innerHTML = R.multiples.map(function (m) {
-    return '<div class="mult"><b>' + esc(m.category) + '</b><span>' + m.multiple.toFixed(3) + 'x</span> <small>· ' + m.protocols + ' token protocols</small></div>';
+  $('formula').textContent = R.fit.coefficients.map(function (c, i) {
+    var name = ['1', 'ln(TVL)', 'ln(1+age)', 'growth', 'chains', 'age unknown'][i];
+    var sign = c >= 0 ? '+' : '−';
+    return (i === 0 ? '' : ' ' + sign + ' ') + Math.abs(c).toFixed(2) + '·' + name;
+  }).join('') + ' + category offset';
+  var coefRows = R.fit.coefficients.map(function (c, i) {
+    return '<tr><td>' + esc(R.fit.coefficientNames[i]) + '</td><td class="num">' + (c >= 0 ? '+' : '') + c.toFixed(4) + '</td></tr>';
   }).join('');
+  var offs = R.fit.categoryOffsets;
+  var offText = offs.length
+    ? 'Category offsets run from ' + offs[0].offset.toFixed(2) + ' (' + esc(offs[0].category) + ') to ' +
+      offs[offs.length - 1].offset.toFixed(2) + ' (' + esc(offs[offs.length - 1].category) + '), shrunk by n/(n+5).'
+    : '';
+  $('coefs').innerHTML = '<table class="coef"><thead><tr><th>Fitted term</th><th class="num">Coefficient</th></tr></thead><tbody>' +
+    coefRows + '</tbody></table><p>' + offText + '</p>';
+  var o = R.fit.outOfSample;
+  $('validation').innerHTML = 'Fit on <strong>' + R.fit.fitProtocols + ' token protocols</strong>' +
+    ' (seven excluded for market cap / TVL over 10×: ' + R.fit.excludedSlugs.map(esc).join(', ') + ').' +
+    ' In-sample R² ' + R.fit.r2InSample.toFixed(2) + '.' +
+    ' Validated out of sample on a 20% holdout (' + o.testProtocols + ' protocols): R² ' + o.fittedR2.toFixed(2) +
+    ' and median absolute log error ' + o.fittedMedianAbsLogError.toFixed(2) +
+    ', against the radar-2 median model on the same holdout (R² ' + o.v2R2.toFixed(2) +
+    ', median error ' + o.v2MedianAbsLogError.toFixed(2) + ').' +
+    ' The fitted 7-day growth weight is small — in this snapshot the median token protocol ' +
+    (R.fit.medianGrowthPct >= 0 ? 'gained ' : 'lost ') + Math.abs(R.fit.medianGrowthPct).toFixed(1) + '% of TVL in seven days, so a week\u2019s move carries almost no signal about market cap; the size curve and the category do the work.';
+
+  /* ---------- fitted-vs-actual chart ---------- */
+  (function renderFitChart() {
+    var pts = R.fit.chart || [];
+    var svg = $('fitchart');
+    if (!pts.length || !svg) return;
+    var W = 560, H = 260, L = 46, Rr = 12, T = 10, B = 30;
+    var xs = pts.map(function (p) { return p.fitted; });
+    var ys = pts.map(function (p) { return p.actual; });
+    var lo = Math.floor(Math.min.apply(null, xs.concat(ys)) - 0.5);
+    var hi = Math.ceil(Math.max.apply(null, xs.concat(ys)) + 0.5);
+    function X(v) { return L + (v - lo) / (hi - lo) * (W - L - Rr); }
+    function Y(v) { return H - B - (v - lo) / (hi - lo) * (H - T - B); }
+    var out = '';
+    out += '<line x1="' + X(lo) + '" y1="' + Y(lo) + '" x2="' + X(hi) + '" y2="' + Y(hi) + '" class="diag"/>';
+    [lo, (lo + hi) / 2, hi].forEach(function (v) {
+      out += '<text x="' + X(v) + '" y="' + (H - 24) + '" class="ax">' + v.toFixed(0) + '</text>';
+      out += '<text x="' + (L - 6) + '" y="' + (Y(v) + 4) + '" class="ax" text-anchor="end">' + v.toFixed(0) + '</text>';
+    });
+    out += '<text x="' + ((W + L) / 2) + '" y="' + (H - 8) + '" class="ax cap" text-anchor="middle">fitted log market cap</text>';    out += '<text x="14" y="' + ((H + T) / 2) + '" class="ax cap" text-anchor="middle" transform="rotate(-90 14 ' + ((H + T) / 2) + ')">actual log market cap</text>';
+    pts.forEach(function (p) {
+      out += '<circle cx="' + X(p.fitted).toFixed(1) + '" cy="' + Y(p.actual).toFixed(1) + '" r="3.5" class="dot"/>';
+    });
+    svg.innerHTML = out;
+  })();
 
   /* ---------- filter controls ---------- */
   var watchlistSlugs = {};
@@ -185,22 +231,31 @@
       var ct = parts.length > 1 ? 'Cost: ' + parts[1] : '';
       return '<li>' + esc(action) + (ct ? '<span class="ct">' + esc(ct) + '</span>' : '') + '</li>';
     }).join('');
-    var eq = moneyFull(r.tvl_usd) + ' × ' + r.base_multiple.toFixed(3) + ' × ' +
-      r.growth_multiplier.toFixed(2) + ' × ' + r.maturity_multiplier.toFixed(2) + ' × ' +
-      r.breadth_multiplier.toFixed(2) + ' = ' + moneyFull(r.implied_value_usd);
+    var coef = R.fit.coefficients;
+    var names = ['1', 'ln(TVL)', 'ln(1+age)', 'growth', 'chains', 'age unknown'];
+    var f = r.features;
+    function signedTerm(c, v) {
+      var prod = c * v;
+      return (prod >= 0 ? ' + ' : ' − ') + Math.abs(c).toFixed(2) + '·' + Math.abs(v).toFixed(2);
+    }
+    var eq = 'log(implied) = ' + coef[0].toFixed(2) +
+      signedTerm(coef[1], f[1]) + signedTerm(coef[2], f[2]) + signedTerm(coef[3], f[3]) +
+      signedTerm(coef[4], f[4]) + (f[5] ? signedTerm(coef[5], f[5]) : '') +
+      (r.category_offset >= 0 ? ' + ' : ' − ') + Math.abs(r.category_offset).toFixed(2) +
+      ' = ' + r.predicted_log_mcap.toFixed(2);
     $('detail-body').innerHTML =
       '<h2>' + esc(r.name) + '</h2>' +
       '<p class="meta">Rank #' + r.rank + ' · ' + esc(r.category || 'Uncategorised') + ' · ' +
-      esc(chainText(r.chains)) + ' · ' + (watchlistSet[r.slug] ? 'on the watchlist · ' : '') +
+      esc(r.chains.length > 1 ? r.chains[0] + ' + ' + (r.chains.length - 1) + ' more chains' : (r.chains[0] || '—')) + ' · ' + (watchlistSet[r.slug] ? 'on the watchlist · ' : '') +
       'tracked since ' + esc(r.listed_at || 'unknown') + '</p>' +
       '<div class="big-label">Implied value</div>' +
       '<div class="big">' + moneyFull(r.implied_value_usd) + '</div>' +
       '<div class="model-box"><span class="eq">' + esc(eq) + '</span><table>' +
       '<tr><td>TVL</td><td>' + moneyFull(r.tvl_usd) + '</td></tr>' +
-      '<tr><td>Category multiple</td><td>' + r.base_multiple.toFixed(3) + 'x — ' + esc(r.multiple_source) + '</td></tr>' +
-      '<tr><td>7-day growth</td><td>' + pct(r.growth_pct) + ' → ×' + r.growth_multiplier.toFixed(2) + '</td></tr>' +
-      '<tr><td>Maturity</td><td>×' + r.maturity_multiplier.toFixed(2) + ' (' + ageText(r.age_days) + ' with no token)</td></tr>' +
-      '<tr><td>Breadth</td><td>×' + r.breadth_multiplier.toFixed(2) + ' (' + r.chains.length + ' chain' + (r.chains.length === 1 ? '' : 's') + ')</td></tr>' +
+      '<tr><td>Fitted multiple</td><td>' + r.fitted_multiple.toFixed(3) + 'x — ' + esc(r.multiple_source) + '</td></tr>' +
+      '<tr><td>7-day growth</td><td>' + pct(r.growth_pct) + ' (fitted weight ' + (coef[3] >= 0 ? '+' : '') + coef[3].toFixed(2) + ')</td></tr>' +
+      '<tr><td>Age</td><td>' + ageText(r.age_days) + ' with no token (fitted weight ' + (coef[2] >= 0 ? '+' : '') + coef[2].toFixed(2) + ' on ln(1+age))</td></tr>' +
+      '<tr><td>Chains</td><td>' + r.chains.length + ' chain' + (r.chains.length === 1 ? '' : 's') + ' (fitted weight ' + (coef[4] >= 0 ? '+' : '') + coef[4].toFixed(2) + ' per extra chain)</td></tr>' +
       '</table></div>' +
       '<h3>How to farm it</h3><ol>' + steps + '</ol>' +
       '<p class="disclaimer">DefiLlama records no token for this protocol. That is the list\u2019s record, not proof it has none — and the implied value is this radar\u2019s own claim, never a promise. Never pay to claim an airdrop.</p>';
